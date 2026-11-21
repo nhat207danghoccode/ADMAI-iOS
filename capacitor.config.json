@@ -1,0 +1,13 @@
+{
+  "appId": "com.nhat207danghoccode.admai",
+  "appName": "ADMAI",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "allowsLinkPreview": false,
+    "scrollEnabled": true
+  }
+}

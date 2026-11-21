@@ -1,0 +1,16 @@
+{
+  "name": "admai-ios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ADMAI wrapped as an iOS WKWebView app using Capacitor",
+  "scripts": {
+    "build:ios": "npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/ios": "^6.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1"
+  }
+}
