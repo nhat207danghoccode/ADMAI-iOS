@@ -4,27 +4,94 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-ios:
     runs-on: macos-15
+
     steps:
+      # 1. Lấy source code
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Cài Node
+      # KHÔNG dùng cache npm vì project không có package-lock.json
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
-          cache: npm
+          node-version: 24
 
-      - name: Install dependencies
-        run: npm install
+      # 3. Kiểm tra source
+      - name: Check project
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Files ==="
+          ls -la
 
-      - name: Generate iOS project
-        run: npx cap add ios
+      # 4. Tạo package.json tối thiểu nếu project chưa có
+      - name: Prepare npm project
+        run: |
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
 
-      - name: Sync web app
-        run: npx cap sync ios
+      # 5. Cài Capacitor
+      - name: Install Capacitor
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/ios --no-audit --no-fund
 
+      # 6. Đảm bảo có web directory
+      - name: Prepare web files
+        run: |
+          mkdir -p www
+
+          if [ -f index.html ]; then
+            cp -R ./*.html www/ 2>/dev/null || true
+            cp -R ./ai.js www/ 2>/dev/null || true
+            cp -R ./ai.css www/ 2>/dev/null || true
+            cp -R ./api.txt www/ 2>/dev/null || true
+            cp -R ./apitts.txt www/ 2>/dev/null || true
+            cp -R ./gif.gif www/ 2>/dev/null || true
+            cp -R ./fb.jpg www/ 2>/dev/null || true
+            cp -R ./tt.jpg www/ 2>/dev/null || true
+            cp -R ./callai.png www/ 2>/dev/null || true
+          fi
+
+          echo "=== WWW ==="
+          find www -maxdepth 2 -type f | sort
+
+      # 7. Tạo capacitor.config.json
+      - name: Create Capacitor config
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.admai.app",
+            "appName": "ADMAI",
+            "webDir": "www",
+            "bundledWebRuntime": false
+          }
+          EOF
+
+      # 8. Tạo iOS project
+      - name: Add iOS platform
+        run: |
+          if [ ! -d ios ]; then
+            npx cap add ios
+          fi
+
+      # 9. Đồng bộ web → iOS
+      - name: Sync Capacitor
+        run: |
+          npx cap sync ios
+
+      # 10. Kiểm tra Xcode
+      - name: Check Xcode
+        run: |
+          xcodebuild -version
+          echo "=== iOS project ==="
+          find ios -maxdepth 3 -type f | head -100
+
+      # 11. Build unsigned .app
+      # Không cần Apple Developer account ở bước này
       - name: Build unsigned iOS app
         run: |
           xcodebuild \
@@ -37,16 +104,39 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Package unsigned IPA
+      # 12. Tìm App.app
+      - name: Locate App
         run: |
+          echo "=== Searching for App.app ==="
+          find build -type d -name "*.app" -print
+
+      # 13. Đóng thành IPA
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find build -type d -name "App.app" | head -1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: App.app not found!"
+            exit 1
+          fi
+
+          echo "Using: $APP_PATH"
+
           rm -rf Payload
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/App.app Payload/ADMAI.app
+
+          cp -R "$APP_PATH" Payload/ADMAI.app
+
           /usr/bin/zip -qry ADMAI-unsigned.ipa Payload
 
+          echo "=== IPA created ==="
+          ls -lh ADMAI-unsigned.ipa
+
+      # 14. Upload IPA lên GitHub Actions
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: ADMAI-unsigned-ipa
           path: ADMAI-unsigned.ipa
           if-no-files-found: error
+          retention-days: 7
